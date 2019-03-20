@@ -1,25 +1,3 @@
-/*CREATE OR REPLACE FUNCTION get_default_owner() RETURNS bigint AS $$
-  DECLARE
-  userExist integer;
-  defaultUsername CONSTANT VARCHAR(20) = 'Default Owner';
-  
-  BEGIN
-  SELECT COUNT(*) INTO userExist FROM "user" WHERE username = defaultUsername;
-  IF userExist != 0 THEN
-	SELECT id FROM "user" WHERE username = defaultUsername;
-  ELSE
-  	INSERT INTO "user" VALUES ((SELECT nextval('id_generator')), defaultUsername);
-  	RETURN id;
-  END IF;
-  END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION fix_activities_without_owner() RETURNS record AS $$
-	UPDATE activity SET owner_id = get_default_owner() WHERE owner_id IS NULL
-	RETURNING activity.id
-$$ LANGUAGE plpgsql;*/
-
-
 CREATE OR REPLACE FUNCTION get_default_owner() RETURNS "user" AS $$
 	DECLARE
 		defaultOwner "user"%rowtype;
@@ -37,12 +15,19 @@ CREATE OR REPLACE FUNCTION get_default_owner() RETURNS "user" AS $$
 	END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION fix_activities_without_owner() RETURNS SETOF activity $$
+
+CREATE OR REPLACE FUNCTION fix_activities_without_owner() RETURNS SETOF activity AS $$
 	DECLARE
-		
+		defaultOwner "user"%rowtype;
+		nowDate date = now();
 	BEGIN
-		UPDATE activity SET owner = (SELECT id FROM user WHERE username = 'Default Owner') WHERE owner_id IS NULL
-		
+        defaultOwner := get_default_owner();
+        return query
+            update activity
+            set owner_id = defaultOwner.id,
+                modification_date = nowDate
+            where owner_id is null
+            returning *;
 	END;
 $$ LANGUAGE plpgsql;
 
